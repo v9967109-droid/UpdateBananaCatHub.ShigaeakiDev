@@ -5755,12 +5755,31 @@ if t.Character then
 end
 t.CharacterAdded:Connect(g)
 local function m(E)
-	return t.Character
-		and (t.Character:FindFirstChild("HumanoidRootPart"))
-		and E
-		and (E:FindFirstChild("HumanoidRootPart"))
-		and E.Humanoid.Health > 0
-		and (t.Character.HumanoidRootPart.Position - E.HumanoidRootPart.Position).Magnitude < 70
+	local Character = t.Character
+	local CharacterRoot = Character and Character:FindFirstChild("HumanoidRootPart")
+	if not CharacterRoot or not E then
+		return false
+	end
+
+	local TargetRoot = E:FindFirstChild("HumanoidRootPart") or E.PrimaryPart
+	local TargetPosition
+
+	if TargetRoot then
+		TargetPosition = TargetRoot.Position
+	elseif E:IsA("Model") then
+		TargetPosition = E:GetPivot().Position
+	end
+
+	if not TargetPosition then
+		return false
+	end
+
+	local Humanoid = E:FindFirstChildOfClass("Humanoid")
+	if Humanoid and Humanoid.Health <= 0 then
+		return false
+	end
+
+	return (CharacterRoot.Position - TargetPosition).Magnitude < 70
 end
 getgenv().ClickM1 = function(E, l)
 	if not m(E) then
@@ -5869,11 +5888,32 @@ function ShootM1(E)
 				end
 				task.wait(t.Character[NameWeapon("Gun")].Cooldown.Value)
 			else
-				local l = { [1] = "TAP", [2] = E.HumanoidRootPart.Position }
-				game:GetService("Players").LocalPlayer.Character
-					:FindFirstChild("Skull Guitar").RemoteEvent
-					:FireServer(unpack(l))
-				task.wait(t.Character[NameWeapon("Gun")].Cooldown.Value)
+				-- Skull Guitar: o alvo pode ser um vaso/Model sem HumanoidRootPart.
+				local character = game:GetService("Players").LocalPlayer.Character
+				local skull = character and character:FindFirstChild("Skull Guitar")
+				local remote = skull and skull:FindFirstChild("RemoteEvent")
+				local targetPosition
+
+				if typeof(E) == "Instance" then
+					if E:IsA("BasePart") then
+						targetPosition = E.Position
+					elseif E:IsA("Model") then
+						targetPosition = E:GetPivot().Position
+					elseif E:IsA("Attachment") then
+						targetPosition = E.WorldPosition
+					elseif E:FindFirstChild("HumanoidRootPart") then
+						targetPosition = E.HumanoidRootPart.Position
+					end
+				end
+
+				if remote and targetPosition then
+					remote:FireServer("TAP", targetPosition)
+					local tool = t.Character and t.Character:FindFirstChild(NameWeapon("Gun"))
+					local cooldown = tool and tool:FindFirstChild("Cooldown")
+					if cooldown then
+						task.wait(cooldown.Value)
+					end
+				end
 			end
 		end
 	end)
@@ -11917,8 +11957,36 @@ function TurnOffNoclipBoat(P)
 		end
 	end
 end
+-- Sea Event: use the nearest owned boat so an old/far boat is not followed.
+function CheckSeaEventBoat()
+	local player = t
+	local boats = game:GetService("Workspace"):FindFirstChild("Boats")
+	if not boats or not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+		return false
+	end
+	local nearest, nearestDistance = false, math.huge
+	local ownerName = player.Name
+	if Settings["Auto Sea Event With Friend"] and Settings["Auto Sea Event"] then
+		ownerName = Settings["Select Friend"]
+	end
+	for _, boat in ipairs(boats:GetChildren()) do
+		if boat:IsA("Model") and boat:FindFirstChild("Owner") and tostring(boat.Owner.Value) == ownerName then
+			local seat = boat:FindFirstChild("VehicleSeat")
+			local humanoid = boat:FindFirstChild("Humanoid")
+			if seat and humanoid and humanoid.Value > 0 then
+				local distance = (seat.Position - player.Character.HumanoidRootPart.Position).Magnitude
+				if distance < nearestDistance then
+					nearest = boat
+					nearestDistance = distance
+				end
+			end
+		end
+	end
+	return nearest
+end
+
 function BuyBoatAndTeleBoat(P)
-	local Y = checkboat()
+	local Y = CheckSeaEventBoat()
 	if Settings["Auto Sea Event With Friend"] and Settings["Auto Sea Event"] then
 		toTarget(game:GetService("Players")[Settings["Select Friend"]].Character.HumanoidRootPart.CFrame)
 		return
@@ -11926,7 +11994,7 @@ function BuyBoatAndTeleBoat(P)
 	if not Settings["Auto Sea Event"] and not P then
 		return
 	end
-	if not Y or Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 4000 then
+	if not Y or (Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 2500) then
 		local H = CFrame.new(-13.488054275512695, 10.311711311340332, 2927.692)
 		H = if game.PlaceId == getgenv().CheckPlaceId
 			then (CFrame.new(-16204.0810546875, 9.0863618850708, 479.2259521484375))
@@ -15329,7 +15397,7 @@ RaceDracoSection.CreateToggle(
 		SaveSettings("Auto Finish Train Draco Quest", g)
 	end
 )
-RaceNormalSection = RaceDracoMain.CreateSection("Race Draco")
+RaceNormalSection = RaceMain.CreateSection("Race Normal")
 function AutoMinkV2()
 	local g = GetNearestChest()
 	if g then
@@ -19094,6 +19162,9 @@ SettingsVolcanoSection.CreateDropdown(
 )
 FarmingVolcanoSection = VolcanoTab.CreateSection("Farming Volcano")
 function AutoCraftinMagnetVol()
+	if Settings["Ignore Craft Volcanic Magnet"] then
+		return
+	end
 	if not CheckItemInventory("Volcanic Magnet") then
 		if not CheckCountItem("Scrap Metal", 10) then
 			local g = { "Jungle Pirate" }
@@ -21346,11 +21417,17 @@ if not getgenv().BananaCatMainLoop then
 			end
 		end)
 		task.spawn(function()
-			if Settings["Change WalkSpeed"] then
-				t.Character.Humanoid.WalkSpeed = Settings["Input WalkSpeed"] or 16
-			end
-			if Settings["Change JumpPower"] then
-				t.Character.Humanoid.JumpPower = Settings["Input JumpPower"] or 50
+			while task.wait(0.15) do
+				local Character = t.Character
+				local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+				if Humanoid then
+					if Settings["Change WalkSpeed"] then
+						Humanoid.WalkSpeed = tonumber(Settings["Input WalkSpeed"]) or 16
+					end
+					if Settings["Change JumpPower"] then
+						Humanoid.JumpPower = tonumber(Settings["Input JumpPower"]) or 50
+					end
+				end
 			end
 		end)
 		if tick() - lastFruitTick >= 0.5 then
