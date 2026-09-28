@@ -1728,7 +1728,7 @@ game:GetService("Players").LocalPlayer.Idled:connect(function()
 end)
 local A =
 	loadstring(game:HttpGet("https://raw.githubusercontent.com/obiiyeuem/vthangsitink/refs/heads/main/zzzz.lua"))()
-Main = A.CreateMain({ Title = "Banana Cat Hub \ By Shigaraki [Beta]", Desc = "" })
+Main = A.CreateMain({ Title = "Banana Cat Hub \ By Shigaraki [Beta]", Desc = "By Shigaraki [Beta]" })
 
 PageShop = Main.CreatePage({ Page_Name = "Shop", Page_Title = "Shop" })
 getgenv().Options = A.Options
@@ -11917,8 +11917,36 @@ function TurnOffNoclipBoat(P)
 		end
 	end
 end
+-- Sea Event: use the nearest owned boat so an old/far boat is not followed.
+function CheckSeaEventBoat()
+	local player = t
+	local boats = game:GetService("Workspace"):FindFirstChild("Boats")
+	if not boats or not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
+		return false
+	end
+	local nearest, nearestDistance = false, math.huge
+	local ownerName = player.Name
+	if Settings["Auto Sea Event With Friend"] and Settings["Auto Sea Event"] then
+		ownerName = Settings["Select Friend"]
+	end
+	for _, boat in ipairs(boats:GetChildren()) do
+		if boat:IsA("Model") and boat:FindFirstChild("Owner") and tostring(boat.Owner.Value) == ownerName then
+			local seat = boat:FindFirstChild("VehicleSeat")
+			local humanoid = boat:FindFirstChild("Humanoid")
+			if seat and humanoid and humanoid.Value > 0 then
+				local distance = (seat.Position - player.Character.HumanoidRootPart.Position).Magnitude
+				if distance < nearestDistance then
+					nearest = boat
+					nearestDistance = distance
+				end
+			end
+		end
+	end
+	return nearest
+end
+
 function BuyBoatAndTeleBoat(P)
-	local Y = checkboat()
+	local Y = CheckSeaEventBoat()
 	if Settings["Auto Sea Event With Friend"] and Settings["Auto Sea Event"] then
 		toTarget(game:GetService("Players")[Settings["Select Friend"]].Character.HumanoidRootPart.CFrame)
 		return
@@ -11926,7 +11954,7 @@ function BuyBoatAndTeleBoat(P)
 	if not Settings["Auto Sea Event"] and not P then
 		return
 	end
-	if not Y or Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 4000 then
+	if not Y or (Y and t:DistanceFromCharacter(Y.VehicleSeat.Position) >= 2500) then
 		local H = CFrame.new(-13.488054275512695, 10.311711311340332, 2927.692)
 		H = if game.PlaceId == getgenv().CheckPlaceId
 			then (CFrame.new(-16204.0810546875, 9.0863618850708, 479.2259521484375))
@@ -14141,8 +14169,8 @@ BoatSettingSection.CreateToggle(
 		SaveSettings("Change Speed Boat", b)
 	end
 )
-RaceMain = Main.CreatePage({ Page_Name = "Evolue/Upgrade Race", Page_Title = "Evolue/Upgrade Race" })
-RaceDracoMain = Main.CreatePage({ Page_Name = "Race Normal", Page_Title = "Race Normal" })
+RaceMain = Main.CreatePage({ Page_Name = "Upgrade Race", Page_Title = "Upgrade Race" })
+RaceDracoMain = Main.CreatePage({ Page_Name = "Race Draco", Page_Title = "Race Draco" })
 RaceDracoSection = RaceDracoMain.CreateSection("Race Draco")
 function DetectGearUp(b)
 	local s = require(game:GetService("Players").LocalPlayer.PlayerGui.TempleGui.LocalScriptTemple.Buttons)
@@ -15329,7 +15357,7 @@ RaceDracoSection.CreateToggle(
 		SaveSettings("Auto Finish Train Draco Quest", g)
 	end
 )
-RaceNormalSection = RaceNormalMain.CreateSection("Race Normal")
+RaceNormalSection = RaceDracoMain.CreateSection("Race Draco")
 function AutoMinkV2()
 	local g = GetNearestChest()
 	if g then
@@ -19054,7 +19082,7 @@ UpgradeWeaponSection.CreateToggle(
 		SaveSettings("Auto Upgrade Gun Inventory", g)
 	end
 )
-VolcanoTab = Main.CreatePage({ Page_Name = "Vulcano Event", Page_Title = "Vulcano Event Tab" })
+VolcanoTab = Main.CreatePage({ Page_Name = "Volcano Event", Page_Title = "Volcano Event Tab" })
 SettingsVolcanoSection = VolcanoTab.CreateSection("Settings Volcano")
 SettingsVolcanoSection.CreateDropdown(
 	{
@@ -20392,7 +20420,7 @@ ESPSection.CreateToggle({ Title = "ESP Player", Desc = nil, Default = Settings["
 	end
 	SaveSettings("ESP Player", b)
 end)
-PvpTab = Main.CreatePage({ Page_Name = "PvP", Page_Title = "PvP Tab" })
+PvpTab = Main.CreatePage({ Page_Name = "PVP", Page_Title = "PVP Tab" })
 SettingsAimbotSection = PvpTab.CreateSection("PVP")
 local b = SettingsAimbotSection.CreateDropdown(
 	{
@@ -20581,8 +20609,8 @@ MISCPVPSection.CreateToggle(
 		SaveSettings("Walk On Water ", b)
 	end
 )
-TabWebhook = Main.CreatePage({ Page_Name = "Webhook", Page_Title = "Webhook" })
-SectionWebhook = TabWebhook.CreateSection("Webhook")
+TabWebhook = Main.CreatePage({ Page_Name = "Tab Webhook", Page_Title = "Tab Webhook" })
+SectionWebhook = TabWebhook.CreateSection("Tab Webhook")
 SectionWebhook.CreateBox(
 	{
 		Title = "Input Url Webhook",
@@ -21346,11 +21374,17 @@ if not getgenv().BananaCatMainLoop then
 			end
 		end)
 		task.spawn(function()
-			if Settings["Change WalkSpeed"] then
-				t.Character.Humanoid.WalkSpeed = Settings["Input WalkSpeed"] or 16
-			end
-			if Settings["Change JumpPower"] then
-				t.Character.Humanoid.JumpPower = Settings["Input JumpPower"] or 50
+			while task.wait(0.15) do
+				local Character = t.Character
+				local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
+				if Humanoid then
+					if Settings["Change WalkSpeed"] then
+						Humanoid.WalkSpeed = tonumber(Settings["Input WalkSpeed"]) or 16
+					end
+					if Settings["Change JumpPower"] then
+						Humanoid.JumpPower = tonumber(Settings["Input JumpPower"]) or 50
+					end
+				end
 			end
 		end)
 		if tick() - lastFruitTick >= 0.5 then
